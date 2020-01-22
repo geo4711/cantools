@@ -84,7 +84,7 @@ DBC_FMT = (
     '{ba_def_def}\r\n'
     '{ba}\r\n'
     '{val}\r\n'
-    '\r\n'
+    '{mux}\r\n'
 )
 
 
@@ -744,6 +744,73 @@ def _dump_choices(database):
                                       for value, text in signal.choices.items()])))
 
     return val
+
+
+def _dump_mux(database):
+    """Create multiplex entries ("SG_MUL_VAL_") if ext. multiplexing is used.
+
+    Return empty string if extended multiplexing is not neccessary.
+    """
+
+    def extended_mux_needed():
+        """Check if there are messages with more than one mux signal
+        or signals with more than one multiplexer values.
+        """
+
+        for msg in database.messages:
+            multiplexers = [sig.name for sig in msg.signals if sig.is_multiplexer]
+            if len(multiplexers) > 1:
+                return True
+
+            for sig in msg.signals:
+                if sig.multiplexer_ids:
+                    if len(sig.multiplexer_ids) > 1:
+                        return True
+        return False
+
+    def get_ranges_from_list(lst: list):
+        """Create a list of ranges based on a list of single values.
+
+        Example:
+            Input:  [1, 2, 3, 5,      7, 8, 9]
+            Output: [[1, 3], [5, 5], [7, 9]]
+        """
+        ordered = sorted(lst)
+        ranges = []
+
+        last_value = ordered[0]
+        ranges.append([last_value, last_value])
+        del ordered[0]
+        while ordered:
+            new_value = ordered[0]
+            if new_value == last_value+1:
+                # update last range
+                ranges[-1][1] = new_value
+            else:
+                # create new range
+                ranges.append([new_value, new_value])
+            last_value = new_value
+            del ordered[0]
+
+        return ranges
+
+    mux = []
+
+    if not extended_mux_needed():
+        return ""
+
+    for message in database.messages:
+        for sig in message.signals:
+            if sig.multiplexer_ids:
+                ranges = get_ranges_from_list(sig.multiplexer_ids)
+                ranges_str = ', '.join(['{}-{}'.format(r[0], r[1])
+                                        for r in ranges])
+                mux.append('SG_MUL_VAL_ {frame_id} {sig} {multiplexer} {ranges};'.format(
+                        frame_id=get_dbc_frame_id(message),
+                        sig=sig.name,
+                        multiplexer=sig.multiplexer_signal,
+                        ranges=ranges_str))
+    return mux
 
 
 def _load_comments(tokens):
@@ -1477,6 +1544,7 @@ def dump_string(database):
     ba_def_def = _dump_attribute_definition_defaults(database)
     ba = _dump_attributes(database)
     val = _dump_choices(database)
+    mux = _dump_mux(database)
 
     return DBC_FMT.format(version=_dump_version(database),
                           bu=' '.join(bu),
@@ -1488,7 +1556,8 @@ def dump_string(database):
                           ba_def='\r\n'.join(ba_def),
                           ba_def_def='\r\n'.join(ba_def_def),
                           ba='\r\n'.join(ba),
-                          val='\r\n'.join(val))
+                          val='\r\n'.join(val),
+                          mux='\r\n'.join(mux))
 
 
 def get_definitions_dict(definitions, defaults):

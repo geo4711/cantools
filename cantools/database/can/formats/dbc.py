@@ -181,7 +181,7 @@ class Parser(textparser.Parser):
 
         token_specs = [
             ('SKIP',     r'[ \r\n\t]+|//.*?\n'),
-            ('NUMBER',   r'-?\d+\.?\d*([eE][+-]?\d+)?'),
+            ('NUMBER',   r'[-+]?\d+\.?\d*([eE][+-]?\d+)?'),
             ('WORD',     r'[A-Za-z0-9_]+'),
             ('STRING',   r'"(\\"|[^"])*?"'),
             ('LPAREN',   r'\('),
@@ -750,6 +750,8 @@ def _dump_mux(database):
     """Create multiplex entries ("SG_MUL_VAL_") if ext. multiplexing is used.
 
     Return empty string if extended multiplexing is not neccessary.
+    Create warning if extended multiplexing is neccessary, but not forseen
+    for this type of database
     """
 
     def extended_mux_needed():
